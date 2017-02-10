@@ -2,12 +2,13 @@
 #include <SoftwareSerial.h>
 #include <Servo.h>
 
-#define SWITCH_CMD_ON ((uint8_t)0x68) // Key : 0
-#define SWITCH_CMD_OFF ((uint8_t)0x30) // Key : 1
+const uint8_t SWITCH_CMD_ON = 0x68; // Key : 0
+const uint8_t SWITCH_CMD_OFF = 0x30; // Key : 1
 
-#define SERVO_ANGLE_SWITCH_ON ((uint32_t)0)
-#define SERVO_ANGLE_SWITCH_OFF ((uint32_t)180)
-#define SERVO_ANGLE_SWITCH_FREE ((uint32_t)90)
+const uint32_t SERVO_ANGLE_SWITCH_OFS = 25;
+const uint32_t SERVO_ANGLE_SWITCH_RST = 97;
+const uint32_t SERVO_ANGLE_SWITCH_ON = SERVO_ANGLE_SWITCH_RST - SERVO_ANGLE_SWITCH_OFS;
+const uint32_t SERVO_ANGLE_SWITCH_OFF = SERVO_ANGLE_SWITCH_RST + SERVO_ANGLE_SWITCH_OFS;
 
 #define SWITCH_DELAY() delay(500)
 
@@ -37,7 +38,7 @@ Servo servo;
 #define SERVO_ATTACHED() servo.attached()
 #define SWITCH_ON() servo.write(SERVO_ANGLE_SWITCH_ON)
 #define SWITCH_OFF() servo.write(SERVO_ANGLE_SWITCH_OFF)
-#define SWITCH_FREE() servo.write(SERVO_ANGLE_SWITCH_FREE)
+#define SWITCH_RST() servo.write(SERVO_ANGLE_SWITCH_RST)
 #define LED_ON() digitalWrite(LED_PIN, HIGH)
 #define LED_OFF() digitalWrite(LED_PIN, LOW)
 #define LED_TOG() digitalWrite(LED_PIN, !digitalRead(LED_PIN))
@@ -88,6 +89,10 @@ void myprintln(uint32_t val, int fmt = DEC)
 }
 
 void startup() {
+  SERVO_ATTACH();
+  SWITCH_RST();
+  SWITCH_DELAY();
+  SERVO_DETACH();
   pinMode(LED_PIN, OUTPUT);
   Serial.begin(9600);
   bt.begin(9600);
@@ -113,8 +118,8 @@ void welcome() {
   myprintln(SWITCH_CMD_OFF, HEX);
   myprint("SERVO_ANGLE_SWITCH_ON: ");
   myprintln(SERVO_ANGLE_SWITCH_ON);
-  myprint("SERVO_ANGLE_SWITCH_FREE: ");
-  myprintln(SERVO_ANGLE_SWITCH_FREE);
+  myprint("SERVO_ANGLE_SWITCH_RST: ");
+  myprintln(SERVO_ANGLE_SWITCH_RST);
   myprint("SERVO_ANGLE_SWITCH_OFF: ");
   myprintln(SERVO_ANGLE_SWITCH_OFF);
 }
@@ -140,7 +145,7 @@ void setSwitchState(SwitchState_e switchState)
     SERVO_ATTACH();
     SWITCH_ON();
     SWITCH_DELAY();
-    SWITCH_FREE();
+    SWITCH_RST();
     SWITCH_DELAY();
     switchState = SWITCH_STATE_ON;
     SERVO_DETACH();
@@ -148,7 +153,7 @@ void setSwitchState(SwitchState_e switchState)
     SERVO_ATTACH();
     SWITCH_OFF();
     SWITCH_DELAY();
-    SWITCH_FREE();
+    SWITCH_RST();
     SWITCH_DELAY();
     switchState = SWITCH_STATE_OFF;
     SERVO_DETACH();
@@ -174,12 +179,14 @@ void blinkLed() {
 }
 
 void loop() {
-  if (ir.decode(&results) && results.bits == 32) {
-    irKeyCode = (results.value >> 8) & 0xFF;
-    if (irKeyCode + ((uint8_t)(results.value & 0xFF)) == 0xFF) {
-      myprint("IR key code received: ");
-      myprintln(irKeyCode, HEX);
-      switchStateCmd(irKeyCode);
+  if (ir.decode(&results)) {
+    if (results.bits == 32) {
+      irKeyCode = (results.value >> 8) & 0xFF;
+      if (irKeyCode + ((uint8_t)(results.value & 0xFF)) == 0xFF) {
+        myprint("IR key code received: ");
+        myprintln(irKeyCode, HEX);
+        switchStateCmd(irKeyCode);
+      }
     }
     ir.resume(); // Receive the next value
   }
